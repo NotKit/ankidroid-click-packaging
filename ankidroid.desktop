@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=AnkiDroid
+Comment=AnkiDroid flashcards (via Android Translation Layer)
+Exec=ankidroid.sh %u
+Icon=ankidroid.png
+Terminal=false
+Type=Application
+X-Ubuntu-Touch=true
+X-Lomiri-Touch=true

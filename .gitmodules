@@ -1,0 +1,12 @@
+[submodule "atl-touch"]
+	path = atl-touch
+	url = https://github.com/NotKit/atl-touch.git
+[submodule "art_standalone"]
+	path = art_standalone
+	url = https://gitlab.com/android_translation_layer/art_standalone.git
+[submodule "bionic_translation"]
+	path = bionic_translation
+	url = https://gitlab.com/android_translation_layer/bionic_translation.git
+[submodule "wolfssl"]
+	path = wolfssl
+	url = https://github.com/wolfSSL/wolfssl.git

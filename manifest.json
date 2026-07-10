@@ -1,0 +1,15 @@
+{
+    "name": "ankidroid.nekit",
+    "description": "AnkiDroid flashcards running natively through atlas (Android Translation Layer)",
+    "architecture": "@CLICK_ARCH@",
+    "title": "AnkiDroid",
+    "hooks": {
+        "ankidroid": {
+            "apparmor": "ankidroid.apparmor",
+            "desktop": "ankidroid.desktop"
+        }
+    },
+    "version": "2.24.0",
+    "maintainer": "Nikita Ukhrenkov <nikita.ukhrenkov@volla.online>",
+    "framework": "@CLICK_FRAMEWORK@"
+}
