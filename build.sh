@@ -42,6 +42,9 @@ WPEWEBKIT_SHA256="cf3e47638595d86de96abdb94db69a836c8aa509fc063be714f52c5a24bb5c
 VIXL_VERSION="8.0.0"
 VIXL_SHA256="6aebbebcd9b66686ea246b450af529e1fc50fe25209522cc9ab42beae2377d38"
 
+LIBUNWIND_VERSION="1.8.2"
+LIBUNWIND_SHA256="7f262f1a1224f437ede0f96a6932b582c8f5421ff207c04e3d9504dfa04c8b82"
+
 # --- environment from clickable's custom builder ------------------------
 
 ROOT="${ROOT:?not run through clickable}"
@@ -70,7 +73,9 @@ export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig:${PREFIX}/share/pkgconfig${PKG_C
 export PATH="${PREFIX}/bin:${PATH}"
 export LD_LIBRARY_PATH="${PREFIX}/lib:${PREFIX}/lib/art${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export LIBRARY_PATH="${PREFIX}/lib"
-export CPATH="${PREFIX}/include"
+# include/vixl is needed because art includes vixl headers as e.g.
+# "aarch64/disasm-aarch64.h" without the vixl/ prefix
+export CPATH="${PREFIX}/include:${PREFIX}/include/vixl"
 export CMAKE_PREFIX_PATH="${PREFIX}"
 JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
 export JAVA_HOME
@@ -78,6 +83,17 @@ export JAVA_HOME
 log()   { echo -e "\033[1;34m[build.sh]\033[0m $*"; }
 stamp() { [ -f "${STAMPS}/$1.done" ]; }
 done_stamp() { touch "${STAMPS}/$1.done"; }
+
+# Stamp names carry the pinned version (or submodule commit) so a stale
+# build/CI cache can never mask a version bump: the renamed stamp simply
+# doesn't exist and the stage rebuilds. Completed stages also delete their
+# build trees — only stage/ is needed afterwards, and CI runners are
+# disk-constrained.
+WOLFSSL_REV="$(git -C "${ROOT}/wolfssl" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BIONIC_REV="$(git -C "${ROOT}/bionic_translation" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# the stage carries our patch, so its stamp must change when the patch does
+BIONIC_REV="${BIONIC_REV}-$(sha256sum "${ROOT}/patches/bionic_translation-ut.patch" | cut -c1-8)"
+ART_REV="$(git -C "${ROOT}/art_standalone" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 fetch() { # fetch <url> <sha256> <outfile>
     local url="$1" sha="$2" out="${DL}/$3"
@@ -92,7 +108,7 @@ fetch() { # fetch <url> <sha256> <outfile>
 
 # --- 1. GLFW 3.4 (noble ships 3.3, atlas needs the libdecor init hint) ---
 
-if ! stamp glfw; then
+if ! stamp "glfw-${GLFW_VERSION}"; then
     log "building GLFW ${GLFW_VERSION}"
     fetch "https://github.com/glfw/glfw/releases/download/${GLFW_VERSION}/glfw-${GLFW_VERSION}.zip" \
           "${GLFW_SHA256}" "glfw-${GLFW_VERSION}.zip"
@@ -108,12 +124,13 @@ if ! stamp glfw; then
         -DGLFW_BUILD_X11=OFF \
         -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF
     ninja -C "${BUILD_DIR}/glfw/build" -j"${JOBS}" install
-    done_stamp glfw
+    done_stamp "glfw-${GLFW_VERSION}"
+    rm -rf "${BUILD_DIR}/glfw"
 fi
 
 # --- 2. WPE WebKit stack (absent from noble; atlas links wpe-webkit-2.0) -
 
-if ! stamp libwpe; then
+if ! stamp "libwpe-${LIBWPE_VERSION}"; then
     log "building libwpe ${LIBWPE_VERSION}"
     fetch "https://wpewebkit.org/releases/libwpe-${LIBWPE_VERSION}.tar.xz" \
           "${LIBWPE_SHA256}" "libwpe-${LIBWPE_VERSION}.tar.xz"
@@ -123,10 +140,11 @@ if ! stamp libwpe; then
     meson setup "${BUILD_DIR}/libwpe/build" "${BUILD_DIR}/libwpe" \
         --prefix="${PREFIX}" --libdir=lib --buildtype=release
     ninja -C "${BUILD_DIR}/libwpe/build" -j"${JOBS}" install
-    done_stamp libwpe
+    done_stamp "libwpe-${LIBWPE_VERSION}"
+    rm -rf "${BUILD_DIR}/libwpe"
 fi
 
-if ! stamp wpebackend-fdo; then
+if ! stamp "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}"; then
     log "building wpebackend-fdo ${WPEBACKEND_FDO_VERSION}"
     fetch "https://wpewebkit.org/releases/wpebackend-fdo-${WPEBACKEND_FDO_VERSION}.tar.xz" \
           "${WPEBACKEND_FDO_SHA256}" "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}.tar.xz"
@@ -136,10 +154,11 @@ if ! stamp wpebackend-fdo; then
     meson setup "${BUILD_DIR}/wpebackend-fdo/build" "${BUILD_DIR}/wpebackend-fdo" \
         --prefix="${PREFIX}" --libdir=lib --buildtype=release
     ninja -C "${BUILD_DIR}/wpebackend-fdo/build" -j"${JOBS}" install
-    done_stamp wpebackend-fdo
+    done_stamp "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}"
+    rm -rf "${BUILD_DIR}/wpebackend-fdo"
 fi
 
-if ! stamp wpewebkit; then
+if ! stamp "wpewebkit-${WPEWEBKIT_VERSION}"; then
     log "building WPE WebKit ${WPEWEBKIT_VERSION} (this is the big one)"
     fetch "https://wpewebkit.org/releases/wpewebkit-${WPEWEBKIT_VERSION}.tar.xz" \
           "${WPEWEBKIT_SHA256}" "wpewebkit-${WPEWEBKIT_VERSION}.tar.xz"
@@ -156,6 +175,9 @@ if ! stamp wpewebkit; then
         -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_MODULE_LINKER_FLAGS="-fuse-ld=lld" \
         -DENABLE_2022_GLIB_API=ON \
+        -DUSE_ATK=OFF \
+        -DUSE_LIBBACKTRACE=OFF \
+        -DUSE_GSTREAMER_TRANSCODER=OFF \
         -DENABLE_DOCUMENTATION=OFF \
         -DENABLE_INTROSPECTION=OFF \
         -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
@@ -165,12 +187,13 @@ if ! stamp wpewebkit; then
         -DENABLE_MINIBROWSER=OFF \
         -DUSE_JPEGXL=OFF
     ninja -C "${BUILD_DIR}/wpewebkit/build" -j"${JOBS}" install
-    done_stamp wpewebkit
+    done_stamp "wpewebkit-${WPEWEBKIT_VERSION}"
+    rm -rf "${BUILD_DIR}/wpewebkit"
 fi
 
 # --- 3. wolfSSL with JNI (distro package has JNI disabled) ---------------
 
-if ! stamp wolfssl; then
+if ! stamp "wolfssl-${WOLFSSL_REV}"; then
     log "building wolfSSL"
     rsync -a --delete --exclude=.git "${ROOT}/wolfssl/" "${BUILD_DIR}/wolfssl/"
     (
@@ -185,12 +208,13 @@ if ! stamp wolfssl; then
         make -j"${JOBS}"
         make install
     )
-    done_stamp wolfssl
+    done_stamp "wolfssl-${WOLFSSL_REV}"
+    rm -rf "${BUILD_DIR}/wolfssl"
 fi
 
 # --- 4. vixl (ARM codegen backend for the art compiler; not in noble) ----
 
-if [ "${ARCH}" = "arm64" ] && ! stamp vixl; then
+if [ "${ARCH}" = "arm64" ] && ! stamp "vixl-${VIXL_VERSION}"; then
     log "building vixl ${VIXL_VERSION}"
     fetch "https://github.com/Linaro/vixl/archive/refs/tags/${VIXL_VERSION}.tar.gz" \
           "${VIXL_SHA256}" "vixl-${VIXL_VERSION}.tar.gz"
@@ -201,30 +225,55 @@ if [ "${ARCH}" = "arm64" ] && ! stamp vixl; then
     meson setup "${BUILD_DIR}/vixl/build" "${BUILD_DIR}/vixl" \
         --prefix="${PREFIX}" --libdir=lib --buildtype=release -Dsimulator=none
     ninja -C "${BUILD_DIR}/vixl/build" -j"${JOBS}" install
-    done_stamp vixl
+    done_stamp "vixl-${VIXL_VERSION}"
+    rm -rf "${BUILD_DIR}/vixl"
+fi
+
+# --- 4b. libunwind >= 1.8 (bionic_translation requires it; noble has 1.6) --
+
+if ! stamp "libunwind-${LIBUNWIND_VERSION}"; then
+    log "building libunwind ${LIBUNWIND_VERSION}"
+    fetch "https://github.com/libunwind/libunwind/releases/download/v${LIBUNWIND_VERSION}/libunwind-${LIBUNWIND_VERSION}.tar.gz" \
+          "${LIBUNWIND_SHA256}" "libunwind-${LIBUNWIND_VERSION}.tar.gz"
+    rm -rf "${BUILD_DIR}/libunwind"
+    tar -xf "${DL}/libunwind-${LIBUNWIND_VERSION}.tar.gz" -C "${BUILD_DIR}"
+    mv "${BUILD_DIR}/libunwind-${LIBUNWIND_VERSION}" "${BUILD_DIR}/libunwind"
+    (
+        cd "${BUILD_DIR}/libunwind"
+        ./configure --prefix="${PREFIX}" --disable-tests --disable-documentation
+        make -j"${JOBS}"
+        make install
+    )
+    done_stamp "libunwind-${LIBUNWIND_VERSION}"
+    rm -rf "${BUILD_DIR}/libunwind"
 fi
 
 # --- 5. bionic_translation ------------------------------------------------
 
-if ! stamp bionic_translation; then
+if ! stamp "bionic_translation-${BIONIC_REV}"; then
     log "building bionic_translation"
     rsync -a --delete --exclude=.git "${ROOT}/bionic_translation/" "${BUILD_DIR}/bionic_translation/"
+    patch -d "${BUILD_DIR}/bionic_translation" -p1 < "${ROOT}/patches/bionic_translation-ut.patch"
     meson setup "${BUILD_DIR}/bionic_translation/build" "${BUILD_DIR}/bionic_translation" \
         --prefix="${PREFIX}" --libdir=lib --buildtype=release
     ninja -C "${BUILD_DIR}/bionic_translation/build" -j"${JOBS}" install
-    done_stamp bionic_translation
+    done_stamp "bionic_translation-${BIONIC_REV}"
+    rm -rf "${BUILD_DIR}/bionic_translation"
 fi
 
 # --- 6. art_standalone (ART runtime, dex2oat, dx, boot classpath) ---------
 
-if ! stamp art_standalone; then
+if ! stamp "art_standalone-${ART_REV}"; then
     log "building art_standalone (self-hosted AOSP frankenbuild)"
     rsync -a --delete --exclude=.git "${ROOT}/art_standalone/" "${BUILD_DIR}/art_standalone/"
+    # clickable exports ARCH=arm64, but art's envsetup.mk expects uname-style
+    # values (aarch64) and maps 'arm64' to 32-bit arm — override explicitly
     make -C "${BUILD_DIR}/art_standalone" -j"${JOBS}" \
-        ____PREFIX="${PREFIX}" ____LIBDIR=lib
+        ARCH="$(uname -m)" ____PREFIX="${PREFIX}" ____LIBDIR=lib
     make -C "${BUILD_DIR}/art_standalone" \
-        ____PREFIX="${PREFIX}" ____LIBDIR=lib install
-    done_stamp art_standalone
+        ARCH="$(uname -m)" ____PREFIX="${PREFIX}" ____LIBDIR=lib install
+    done_stamp "art_standalone-${ART_REV}"
+    rm -rf "${BUILD_DIR}/art_standalone"
 fi
 
 # --- 7. atlas ---------------------------------------------------------------

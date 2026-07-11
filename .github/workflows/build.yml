@@ -1,0 +1,73 @@
+name: Build click package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Native arm64 runner — the toolchain (art_standalone) only supports
+    # self-hosted builds, and native beats qemu by an order of magnitude.
+    # Free for public repos; private repos need a paid arm64 runner.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 350
+    env:
+      CLICKABLE_NON_INTERACTIVE: "1"
+    steps:
+      # NOTE: this fails until the atl-touch submodule URL in .gitmodules points
+      # at a pushed repository (it is a placeholder until the atl-touch fork is
+      # published).
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/.ghcup /usr/local/share/boost || true
+          df -h /
+
+      # The whole dependency chain (WPE WebKit, ART, wolfSSL, ...) is staged
+      # under build/.../app and skipped via stamps on later runs. Stamps are
+      # version/commit-suffixed (see build.sh), so a stale cache entry never
+      # masks a version bump — the changed stage just rebuilds.
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/aarch64-linux-gnu/app/stage
+            build/aarch64-linux-gnu/app/stamps
+            build/aarch64-linux-gnu/app/downloads
+            build/aarch64-linux-gnu/app/atlas-src/subprojects/skia
+          key: atl-touch-click-arm64-${{ github.run_id }}
+          restore-keys: |
+            atl-touch-click-arm64-
+
+      - name: Install clickable
+        run: pipx install clickable-ut
+
+      - name: Build
+        run: clickable build --arch arm64 --verbose
+
+      # Save even when the job fails or times out: completed stages are
+      # stamped, so the next run resumes instead of starting over. Keyed by
+      # run id so every run uploads its progress (old entries are evicted).
+      - name: Save build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/aarch64-linux-gnu/app/stage
+            build/aarch64-linux-gnu/app/stamps
+            build/aarch64-linux-gnu/app/downloads
+            build/aarch64-linux-gnu/app/atlas-src/subprojects/skia
+          key: atl-touch-click-arm64-${{ github.run_id }}
+
+      - name: Upload click package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ankidroid-click-arm64
+          path: build/aarch64-linux-gnu/app/*.click
+          if-no-files-found: error

@@ -1,7 +1,7 @@
-# AnkiDroid for Ubuntu Touch (via atlas)
+# AnkiDroid for Ubuntu Touch (via atl-touch)
 
 Clickable packaging that runs the stock [AnkiDroid](https://github.com/ankidroid/Anki-Android)
-Android APK on Ubuntu Touch through **atlas**, a fork of
+Android APK on Ubuntu Touch through **atl-touch**, a fork of
 [android_translation_layer](https://gitlab.com/android_translation_layer/android_translation_layer)
 (ATL) ported to run without GTK on Lomiri/Mir.
 
@@ -47,8 +47,8 @@ clickable build --arch arm64
 
 Be prepared for the **first build to take many hours** on an x86_64 host —
 WPE WebKit, ART and skia all compile under qemu emulation. Every stage is
-stamped and cached under `build/`, so iterating on atlas or the packaging
-afterwards is cheap (only atlas rebuilds).
+stamped and cached under `build/`, so iterating on atl-touch or the packaging
+afterwards is cheap (only atl-touch rebuilds).
 
 Useful knobs:
 
@@ -66,7 +66,7 @@ Install on the device with `clickable install` (or copy the `.click` from
   copied into the click under `usr/`. `scripts/copy-runtime-libs.sh` walks
   `ldd` over all shipped binaries and bundles every dependency that is not
   guaranteed on the UT rootfs (glibc, GL/wayland/audio stacks are excluded).
-* atlas itself is configured with
+* atl-touch itself is configured with
   `--prefix=/opt/click.ubuntu.com/ankidroid.nekit/current/usr` — click keeps
   a version-independent `current` symlink, so compiled-in paths (rpath,
   fonts.xml data dir) resolve on the device across package upgrades.
@@ -79,6 +79,19 @@ Install on the device with `clickable install` (or copy the `.click` from
   `dex2oat` pass that AOT-compiles the boot classpath, `api-impl.jar` and
   the APK with dex locations pointing at the `current` click path.
 
+## CI
+
+`.github/workflows/build.yml` builds the click on GitHub's native
+`ubuntu-24.04-arm` runners (no qemu) and uploads the `.click` as an
+artifact. The staged toolchain (`stage/`, `stamps/`, `downloads/`, the skia
+checkout) is carried between runs with `actions/cache`, saved even on
+failure/timeout, so an interrupted first build resumes instead of starting
+over. Stage stamps are suffixed with the pinned version (or submodule
+commit), so bumping a version in `build.sh` invalidates exactly that stage.
+
+Note: CI can only work once the `atl-touch` submodule URL in `.gitmodules`
+points at a published repository.
+
 ## Updating AnkiDroid
 
 Bump `ANKIDROID_VERSION` + `APK_SHA256` in `build.sh` and `version` in
@@ -87,17 +100,28 @@ Bump `ANKIDROID_VERSION` + `APK_SHA256` in `build.sh` and `version` in
 ## Known caveats / TODO
 
 * **The `atl-touch` submodule URL (`https://github.com/NotKit/atl-touch.git`) is a
-  placeholder** — the local atlas (atl-touch) working tree has commits that
+  placeholder** — the local atl-touch working tree has commits that
   exist nowhere public yet. Push the fork and adjust `.gitmodules` if the
   URL differs.
 * amd64 builds are plumbed (APK variant mapping, no vixl) but untested and
   currently disabled (`restrict_arch: arm64`); the amd64 APK sha256 is not
   filled in either.
-* atlas creates its window through GLFW and does not set a Wayland `app_id`
-  matching the click hook (`ankidroid.nekit_ankidroid_...`), which Lomiri
-  uses to associate windows with launchers. If the window doesn't appear or
-  shows as an unknown app, atlas needs a small patch to set
-  `GLFW_WAYLAND_APP_ID` (GLFW 3.4 supports it; we already build 3.4).
+* Device status (tested 2026-07-11 on UT 24.04/arm64): install works, ATL
+  boots — on-device dex2oat (first launch ~15 s, then cached), JVM up, APK
+  parsed, Wayland surface created via the GLES fallback in
+  `patches/atlas-ut-window.patch` — then AnkiDroid **crashes with SIGSEGV in
+  its Rust backend `librsdroid.so`** right after the bionic linker loads it
+  (fault address looks like a corrupted/tagged pointer). This is atlas
+  runtime work (the "M0: run stock AnkiDroid under ATL" milestone), not a
+  packaging issue.
+* `patches/atlas-ut-window.patch` also sets the Wayland `app_id` from the
+  `$APP_ID` env (provided by lomiri-app-launch) so Lomiri associates the
+  window with the launcher entry; both hunks are candidates for atlas
+  proper.
+* The shipped AOT files (`oat/arm64/*.oat`) are not picked up by this art
+  revision because dex2oat in the container refuses to write the `boot.art`
+  image ("image compilation disabled"); the device regenerates everything
+  into `~/.cache/art` on first launch instead. Harmless, ~30 MB dead weight.
 * Media playback in cards relies on the device's GStreamer plugin set.
 * First launch without the AOT pass is slow (on-device dex2oat).
 * `libopensles-standalone` is not bundled (AnkiDroid doesn't seem to need
