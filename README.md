@@ -106,14 +106,17 @@ Bump `ANKIDROID_VERSION` + `APK_SHA256` in `build.sh` and `version` in
 * amd64 builds are plumbed (APK variant mapping, no vixl) but untested and
   currently disabled (`restrict_arch: arm64`); the amd64 APK sha256 is not
   filled in either.
-* Device status (tested 2026-07-11 on UT 24.04/arm64): install works, ATL
-  boots — on-device dex2oat (first launch ~15 s, then cached), JVM up, APK
-  parsed, Wayland surface created via the GLES fallback in
-  `patches/atlas-ut-window.patch` — then AnkiDroid **crashes with SIGSEGV in
-  its Rust backend `librsdroid.so`** right after the bionic linker loads it
-  (fault address looks like a corrupted/tagged pointer). This is atlas
-  runtime work (the "M0: run stock AnkiDroid under ATL" milestone), not a
-  packaging issue.
+* Device status (2026-07-11, UT 24.04/arm64, tested on two devices):
+  **AnkiDroid boots to its intro screen at the correct UI scale and
+  responds to touch.** First launch spends ~15 s in on-device dex2oat
+  (then cached). Getting there required the patches in `patches/`
+  (all candidates for upstreaming into atl-touch / bionic_translation):
+  GLES context fallback, ES2 shader blit, wl_touch input, GRID_UNIT_PX
+  density, wrong-arch ELF rejection in the bionic linker (it was parsing
+  the 32-bit `/system/lib/liblog.so` from the Halium container), and
+  cfg.d overrides via `XDG_DATA_DIRS` in the launcher. Untested yet:
+  WebView card rendering, on-screen keyboard, content-hub import,
+  multi-touch.
 * `patches/atlas-ut-window.patch` also sets the Wayland `app_id` from the
   `$APP_ID` env (provided by lomiri-app-launch) so Lomiri associates the
   window with the launcher entry; both hunks are candidates for atlas
