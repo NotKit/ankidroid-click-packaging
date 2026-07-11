@@ -107,20 +107,21 @@ Bump `ANKIDROID_VERSION` + `APK_SHA256` in `build.sh` and `version` in
   currently disabled (`restrict_arch: arm64`); the amd64 APK sha256 is not
   filled in either.
 * Device status (2026-07-11, UT 24.04/arm64, tested on two devices):
-  **AnkiDroid boots to its intro screen at the correct UI scale and
-  responds to touch.** First launch spends ~15 s in on-device dex2oat
-  (then cached). Getting there required the patches in `patches/`
-  (all candidates for upstreaming into atl-touch / bionic_translation):
-  GLES context fallback, ES2 shader blit, wl_touch input, GRID_UNIT_PX
-  density, wrong-arch ELF rejection in the bionic linker (it was parsing
-  the 32-bit `/system/lib/liblog.so` from the Halium container), and
-  cfg.d overrides via `XDG_DATA_DIRS` in the launcher. Untested yet:
-  WebView card rendering, on-screen keyboard, content-hub import,
-  multi-touch.
-* `patches/atlas-ut-window.patch` also sets the Wayland `app_id` from the
-  `$APP_ID` env (provided by lomiri-app-launch) so Lomiri associates the
-  window with the launcher entry; both hunks are candidates for atlas
-  proper.
+  **AnkiDroid runs interactively** — boots to the UI at the correct scale,
+  touch input works, and text entry works through the on-screen keyboard
+  (soft keyboard with predictive/composing text, auto-hide on focus loss).
+  First launch spends ~15 s in on-device dex2oat (then cached). All the
+  device enablement now lives in the `atl-touch` submodule (GLES context +
+  ES2 blit, wl_touch input, GRID_UNIT_PX density, Maliit soft keyboard) and
+  in `patches/bionic_translation-ut.patch` (reject wrong-arch ELFs so the
+  linker doesn't parse the Halium container's 32-bit `/system/lib` libs).
+  The launcher supplies `XDG_DATA_DIRS` (cfg.d overrides) and `$APP_ID`.
+  Untested yet: WebView card rendering, content-hub import, multi-touch.
+* The soft keyboard uses the Maliit D-Bus interface (Lomiri/SailfishOS
+  drive the keyboard that way, not over a wayland text-input protocol);
+  atl-touch's input-method backend is pluggable, so a `zwp_text_input_v3`
+  backend can be added for desktop wayland shells. `libmaliit-glib-dev` is
+  a build dependency; `ATL_IM_MODULE=none` disables the keyboard.
 * The shipped AOT files (`oat/arm64/*.oat`) are not picked up by this art
   revision because dex2oat in the container refuses to write the `boot.art`
   image ("image compilation disabled"); the device regenerates everything

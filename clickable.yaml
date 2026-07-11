@@ -62,6 +62,7 @@ dependencies_target:
   - libwayland-dev
   - wayland-protocols
   - libfontconfig-dev
+  - libmaliit-glib-dev
   - libxkbcommon-dev
   - libgbm-dev
   # skia subproject (system libraries, see atlas/subprojects/packagefiles/skia)
