@@ -315,6 +315,11 @@ fi
 if [ -d "${PREFIX}/share/bionic_translation" ]; then
     rsync -a "${PREFIX}/share/bionic_translation" "${INSTALL_DIR}/usr/share/"
 fi
+
+# WPE bakes ${PREFIX} into libWPEWebKit (pkglibexecdir etc.) and only honors
+# WEBKIT_EXEC_PATH with DEVELOPER_MODE builds; rewrite it to the click prefix
+python3 "${ROOT}/scripts/patch-baked-paths.py" "${PREFIX}" "${CLICK_PREFIX}" \
+    "${INSTALL_DIR}"/usr/lib/libWPEWebKit-2.0.so.*.*.*
 # dex2oat so the device can AOT-compile if our prebuilt oat files are unusable
 install -D "${PREFIX}/bin/dex2oat" "${INSTALL_DIR}/usr/bin/dex2oat"
 # not needed at runtime
