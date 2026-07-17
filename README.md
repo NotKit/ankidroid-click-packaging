@@ -18,7 +18,7 @@ container, and shipped in one click package:
 | `bionic_translation/` (submodule) | upstream ATL project | bionic→glibc linker/libc shims |
 | `wolfssl/` (submodule) | upstream wolfSSL | TLS with JNI enabled (distro build has it off) |
 | GLFW 3.4 | tarball (pinned in `build.sh`) | windowing; noble only ships 3.3 |
-| libwpe / wpebackend-fdo / WPE WebKit | tarballs (pinned) | WebView backend; not packaged in noble at all |
+| Qt 6.10 WebEngine | system packages (24.04-2.x archive) | WebView backend (`libatl_webview_qt.so`, built by atlas' meson) |
 | vixl 8.0.0 | tarball + flathub meson patch | ARM codegen for the art compiler |
 | AnkiDroid APK | GitHub release (pinned) | the app |
 
@@ -35,7 +35,7 @@ container, and shipped in one click package:
   ls /proc/sys/fs/binfmt_misc/ | grep qemu-aarch64   # must show up
   ```
 
-* Disk: ~40 GB of build tree (WPE WebKit dominates). RAM: ≥16 GB recommended.
+* Disk: ~15 GB of build tree. RAM: ≥16 GB recommended.
 
 ## Building
 
@@ -45,8 +45,8 @@ cd ankidroid-click-packaging
 clickable build --arch arm64
 ```
 
-Be prepared for the **first build to take many hours** on an x86_64 host —
-WPE WebKit, ART and skia all compile under qemu emulation. Every stage is
+Be prepared for the **first build to take a few hours** on an x86_64 host —
+ART and skia compile under qemu emulation. Every stage is
 stamped and cached under `build/`, so iterating on atl-touch or the packaging
 afterwards is cheap (only atl-touch rebuilds).
 
@@ -71,8 +71,9 @@ Install on the device with `clickable install` (or copy the `.click` from
   a version-independent `current` symlink, so compiled-in paths (rpath,
   fonts.xml data dir) resolve on the device across package upgrades.
 * At runtime `ankidroid.sh` sets `LD_LIBRARY_PATH`, `JAVA_HOME` (TLS trust
-  store for wolfssljni), `WEBKIT_EXEC_PATH`/`WEBKIT_INJECTED_BUNDLE_PATH`
-  (bundled WPE) and launches
+  store for wolfssljni), `ATL_WEBVIEW_MODULE=qt` (system Qt WebEngine
+  WebView backend, with the bundled xdg-shell QPA plugin on `QT_PLUGIN_PATH`)
+  and launches
   `android-translation-layer .../AnkiDroid.apk`. ART finds the boot
   classpath relative to wherever `libart.so` was loaded from.
 * Like the flathub NewPipe package, `build.sh` ends with a best-effort

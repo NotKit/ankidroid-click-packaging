@@ -8,9 +8,8 @@
 #
 # Runs inside a NATIVE arm64 clickable container (art_standalone cannot be
 # cross-compiled). On an x86_64 host docker runs the container via
-# qemu-user/binfmt_misc — slow (the first build takes many hours, most of it
-# WPE WebKit) but fully unattended. All stages are stamped and cached in
-# ${ROOT}/build, so subsequent builds only redo what changed.
+# qemu-user/binfmt_misc — slow but fully unattended. All stages are stamped
+# and cached in ${ROOT}/build, so subsequent builds only redo what changed.
 set -euo pipefail
 
 APP_ID="ankidroid.nekit"
@@ -29,15 +28,6 @@ ANKIDROID_VERSION="2.24.0"
 
 GLFW_VERSION="3.4"
 GLFW_SHA256="b5ec004b2712fd08e8861dc271428f048775200a2df719ccf575143ba749a3e9"
-
-LIBWPE_VERSION="1.16.2"
-LIBWPE_SHA256="960bdd11c3f2cf5bd91569603ed6d2aa42fd4000ed7cac930a804eac367888d7"
-
-WPEBACKEND_FDO_VERSION="1.16.1"
-WPEBACKEND_FDO_SHA256="544ae14012f8e7e426b8cb522eb0aaaac831ad7c35601d1cf31d37670e0ebb3b"
-
-WPEWEBKIT_VERSION="2.46.7"
-WPEWEBKIT_SHA256="cf3e47638595d86de96abdb94db69a836c8aa509fc063be714f52c5a24bb5cd5"
 
 VIXL_VERSION="8.0.0"
 VIXL_SHA256="6aebbebcd9b66686ea246b450af529e1fc50fe25209522cc9ab42beae2377d38"
@@ -128,67 +118,19 @@ if ! stamp "glfw-${GLFW_VERSION}"; then
     rm -rf "${BUILD_DIR}/glfw"
 fi
 
-# --- 2. WPE WebKit stack (absent from noble; atlas links wpe-webkit-2.0) -
+# --- 2. WPE WebKit stack: GONE. The WebView backend is now the Qt WebEngine
+# module (libatl_webview_qt.so) against the system Qt 6.10 of 24.04-2.x;
+# scrub WPE leftovers from cached stages so they never get shipped again.
 
-if ! stamp "libwpe-${LIBWPE_VERSION}"; then
-    log "building libwpe ${LIBWPE_VERSION}"
-    fetch "https://wpewebkit.org/releases/libwpe-${LIBWPE_VERSION}.tar.xz" \
-          "${LIBWPE_SHA256}" "libwpe-${LIBWPE_VERSION}.tar.xz"
-    rm -rf "${BUILD_DIR}/libwpe"
-    tar -xf "${DL}/libwpe-${LIBWPE_VERSION}.tar.xz" -C "${BUILD_DIR}"
-    mv "${BUILD_DIR}/libwpe-${LIBWPE_VERSION}" "${BUILD_DIR}/libwpe"
-    meson setup "${BUILD_DIR}/libwpe/build" "${BUILD_DIR}/libwpe" \
-        --prefix="${PREFIX}" --libdir=lib --buildtype=release
-    ninja -C "${BUILD_DIR}/libwpe/build" -j"${JOBS}" install
-    done_stamp "libwpe-${LIBWPE_VERSION}"
-    rm -rf "${BUILD_DIR}/libwpe"
-fi
-
-if ! stamp "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}"; then
-    log "building wpebackend-fdo ${WPEBACKEND_FDO_VERSION}"
-    fetch "https://wpewebkit.org/releases/wpebackend-fdo-${WPEBACKEND_FDO_VERSION}.tar.xz" \
-          "${WPEBACKEND_FDO_SHA256}" "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}.tar.xz"
-    rm -rf "${BUILD_DIR}/wpebackend-fdo"
-    tar -xf "${DL}/wpebackend-fdo-${WPEBACKEND_FDO_VERSION}.tar.xz" -C "${BUILD_DIR}"
-    mv "${BUILD_DIR}/wpebackend-fdo-${WPEBACKEND_FDO_VERSION}" "${BUILD_DIR}/wpebackend-fdo"
-    meson setup "${BUILD_DIR}/wpebackend-fdo/build" "${BUILD_DIR}/wpebackend-fdo" \
-        --prefix="${PREFIX}" --libdir=lib --buildtype=release
-    ninja -C "${BUILD_DIR}/wpebackend-fdo/build" -j"${JOBS}" install
-    done_stamp "wpebackend-fdo-${WPEBACKEND_FDO_VERSION}"
-    rm -rf "${BUILD_DIR}/wpebackend-fdo"
-fi
-
-if ! stamp "wpewebkit-${WPEWEBKIT_VERSION}"; then
-    log "building WPE WebKit ${WPEWEBKIT_VERSION} (this is the big one)"
-    fetch "https://wpewebkit.org/releases/wpewebkit-${WPEWEBKIT_VERSION}.tar.xz" \
-          "${WPEWEBKIT_SHA256}" "wpewebkit-${WPEWEBKIT_VERSION}.tar.xz"
-    if [ ! -d "${BUILD_DIR}/wpewebkit" ]; then
-        tar -xf "${DL}/wpewebkit-${WPEWEBKIT_VERSION}.tar.xz" -C "${BUILD_DIR}"
-        mv "${BUILD_DIR}/wpewebkit-${WPEWEBKIT_VERSION}" "${BUILD_DIR}/wpewebkit"
-    fi
-    cmake -S "${BUILD_DIR}/wpewebkit" -B "${BUILD_DIR}/wpewebkit/build" -GNinja \
-        -DPORT=WPE \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-        -DCMAKE_INSTALL_LIBDIR=lib \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
-        -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
-        -DCMAKE_MODULE_LINKER_FLAGS="-fuse-ld=lld" \
-        -DENABLE_2022_GLIB_API=ON \
-        -DUSE_ATK=OFF \
-        -DUSE_LIBBACKTRACE=OFF \
-        -DUSE_GSTREAMER_TRANSCODER=OFF \
-        -DENABLE_DOCUMENTATION=OFF \
-        -DENABLE_INTROSPECTION=OFF \
-        -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
-        -DENABLE_GAMEPAD=OFF \
-        -DENABLE_SPEECH_SYNTHESIS=OFF \
-        -DENABLE_JOURNALD_LOG=OFF \
-        -DENABLE_MINIBROWSER=OFF \
-        -DUSE_JPEGXL=OFF
-    ninja -C "${BUILD_DIR}/wpewebkit/build" -j"${JOBS}" install
-    done_stamp "wpewebkit-${WPEWEBKIT_VERSION}"
-    rm -rf "${BUILD_DIR}/wpewebkit"
+if ! stamp "wpe-removed"; then
+    log "scrubbing WPE artifacts from cached stage"
+    rm -rf "${PREFIX}"/lib/libWPE* "${PREFIX}"/lib/libwpe* \
+           "${PREFIX}"/lib/wpe-webkit-2.0 "${PREFIX}"/libexec/wpe-webkit-2.0 \
+           "${PREFIX}"/include/wpe* "${PREFIX}"/lib/pkgconfig/wpe* \
+           "${PREFIX}"/lib/pkgconfig/libwpe* "${PREFIX}"/share/wpe* \
+           "${STAMPS}"/libwpe-*.done "${STAMPS}"/wpebackend-fdo-*.done \
+           "${STAMPS}"/wpewebkit-*.done
+    done_stamp "wpe-removed"
 fi
 
 # --- 3. wolfSSL with JNI (distro package has JNI disabled) ---------------
@@ -304,7 +246,7 @@ mkdir -p "${INSTALL_DIR}/usr"
 # atlas (built with the click runtime prefix)
 cp -a "${BUILD_DIR}/atlas-dest${CLICK_PREFIX}/." "${INSTALL_DIR}/usr/"
 
-# staged runtime: art, boot classpath, wolfssl, glfw, wpe, bionic libs, ...
+# staged runtime: art, boot classpath, wolfssl, glfw, bionic libs, ...
 rsync -a \
     --exclude='pkgconfig' --exclude='cmake' \
     --exclude='*.a' --exclude='*.la' \
@@ -316,10 +258,12 @@ if [ -d "${PREFIX}/share/bionic_translation" ]; then
     rsync -a "${PREFIX}/share/bionic_translation" "${INSTALL_DIR}/usr/share/"
 fi
 
-# WPE bakes ${PREFIX} into libWPEWebKit (pkglibexecdir etc.) and only honors
-# WEBKIT_EXEC_PATH with DEVELOPER_MODE builds; rewrite it to the click prefix
-python3 "${ROOT}/scripts/patch-baked-paths.py" "${PREFIX}" "${CLICK_PREFIX}" \
-    "${INSTALL_DIR}"/usr/lib/libWPEWebKit-2.0.so.*.*.*
+# the Qt backend runs in-process against system Qt, but Qt's wayland QPA
+# refuses to load without a shell-integration plugin and the device image
+# ships none — bundle xdg-shell from the build container (same Qt version)
+install -D /usr/lib/*/qt6/plugins/wayland-shell-integration/libxdg-shell.so \
+    "${INSTALL_DIR}/usr/lib/qt6-plugins/wayland-shell-integration/libxdg-shell.so"
+
 # dex2oat so the device can AOT-compile if our prebuilt oat files are unusable
 install -D "${PREFIX}/bin/dex2oat" "${INSTALL_DIR}/usr/bin/dex2oat"
 # not needed at runtime

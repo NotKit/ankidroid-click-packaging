@@ -1,6 +1,6 @@
 clickable_minimum_required: 8.0.0
 builder: custom
-framework: ubuntu-touch-24.04-1.x
+framework: ubuntu-touch-24.04-2.x
 kill: android-translation-layer
 skip_review: true
 restrict_arch: arm64
@@ -8,7 +8,7 @@ restrict_arch: arm64
 # art_standalone only supports self-hosted (native) builds, so this project
 # must build inside a NATIVE arm64 container. On an x86_64 host docker runs
 # it through qemu-user (needs qemu-user-static + binfmt_misc registered).
-docker_image: docker.io/clickable/arm64-ut24.04-1.x-arm64
+docker_image: docker.io/clickable/arm64-ut24.04-2.x-arm64
 
 build:
   - ${ROOT}/build.sh
@@ -83,15 +83,12 @@ dependencies_target:
   - liblzma-dev
   - libssl-dev
   - libunwind-dev
-  # WPE WebKit (built from source in build.sh; noble does not package it)
-  - libsoup-3.0-dev
-  - libxslt1-dev
-  - libtasn1-6-dev
-  - libhyphen-dev
-  - libwoff-dev
-  - liblcms2-dev
-  - libopenjp2-7-dev
-  - libavif-dev
-  - libgcrypt20-dev
-  - libepoxy-dev
-  - libsystemd-dev
+  # Qt WebEngine WebView backend (libatl_webview_qt.so, built by atlas'
+  # meson when Qt 6 is present; 24.04-2.x ships Qt 6.10 with WebEngine, so
+  # nothing web-related is bundled in the click anymore)
+  - qt6-base-dev
+  - qt6-base-dev-tools
+  - qt6-declarative-dev
+  - qt6-webengine-dev
+  # source of the xdg-shell integration plugin the device image lacks
+  - qt6-wayland

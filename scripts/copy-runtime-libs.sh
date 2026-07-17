@@ -10,8 +10,10 @@ set -euo pipefail
 INSTALL_DIR="${1:?usage: copy-runtime-libs.sh <install-dir>}"
 LIBDIR="${INSTALL_DIR}/usr/lib"
 
-# never ship: loader/libc, GPU/driver stacks and device-specific plumbing
-BLOCKLIST='^(ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libresolv\.so|libutil\.so|libgcc_s|libstdc\+\+|libEGL|libGL\.so|libGLX|libGLES|libGLdispatch|libOpenGL|libgbm|libglapi|libdrm|libhybris|libwayland-|libX|libxcb|libxshmfence|libasound|libpulse|libsystemd|libudev\.so|libdbus-1|libapparmor|libselinux)'
+# never ship: loader/libc, GPU/driver stacks, device-specific plumbing, and
+# Qt (the whole point of the Qt WebView backend is using the system Qt;
+# small transitive Qt deps may still be bundled — harmless duplicates)
+BLOCKLIST='^(ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libresolv\.so|libutil\.so|libgcc_s|libstdc\+\+|libEGL|libGL\.so|libGLX|libGLES|libGLdispatch|libOpenGL|libgbm|libglapi|libdrm|libhybris|libwayland-|libX|libxcb|libxshmfence|libasound|libpulse|libsystemd|libudev\.so|libdbus-1|libapparmor|libselinux|libQt6)'
 
 seen="$(mktemp)"
 trap 'rm -f "${seen}"' EXIT

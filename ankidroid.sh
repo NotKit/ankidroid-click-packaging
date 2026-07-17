@@ -21,12 +21,13 @@ export JAVA_HOME="${PKG_ROOT}/usr/share/java_home"
 # this the bionic linker resolves libc/EGL/... to random system files
 export XDG_DATA_DIRS="${PKG_ROOT}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 
-# WPE WebKit is bundled inside the click
-export WEBKIT_EXEC_PATH="${PKG_ROOT}/usr/libexec/wpe-webkit-2.0"
-export WEBKIT_INJECTED_BUNDLE_PATH="${PKG_ROOT}/usr/lib/wpe-webkit-2.0/injected-bundle"
-
-# AnkiDroid renders cards in a WebView
+# AnkiDroid renders cards in a WebView; use the Qt WebEngine backend module
+# against the system Qt 6.10. Qt's wayland QPA needs a shell-integration
+# plugin, which the device image lacks — the click bundles xdg-shell.
 export ATL_UGLY_ENABLE_WEBVIEW=1
+export ATL_WEBVIEW_MODULE=qt
+export QT_QPA_PLATFORM=wayland
+export QT_PLUGIN_PATH="${PKG_ROOT}/usr/lib/qt6-plugins${QT_PLUGIN_PATH:+:${QT_PLUGIN_PATH}}"
 
 # Wayland app_id must match the desktop file id (<pkg>_<app>_<version>) for
 # Lomiri to associate the window with the launcher entry; atlas picks this
