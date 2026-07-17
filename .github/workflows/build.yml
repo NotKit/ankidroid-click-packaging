@@ -13,6 +13,9 @@ jobs:
     # Free for public repos; private repos need a paid arm64 runner.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 350
+    # For the release step to create tags/releases.
+    permissions:
+      contents: write
     env:
       CLICKABLE_NON_INTERACTIVE: "1"
     steps:
@@ -71,3 +74,26 @@ jobs:
           name: ankidroid-click-arm64
           path: build/aarch64-linux-gnu/app/*.click
           if-no-files-found: error
+
+      # Publish the click to a release so testers can grab it without a GitHub
+      # login (Actions artifacts are login-only). Tagged by AnkiDroid version +
+      # atl-touch commit, marked prerelease. Skipped on PRs (no write token).
+      - name: Publish to GitHub release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          atl_sha=$(git -C atl-touch rev-parse --short HEAD)
+          tag="v${version}-atl.${atl_sha}"
+          click=$(ls build/aarch64-linux-gnu/app/*.click)
+          echo "Publishing $click as $tag"
+          # Same tag refreshes the asset; a new atl-touch commit makes a new one.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$click" --clobber
+          else
+            gh release create "$tag" "$click" \
+              --title "AnkiDroid ${version} (atl-touch ${atl_sha})" \
+              --prerelease \
+              --notes "Unofficial test build of AnkiDroid ${version} for Ubuntu Touch (24.04-2.x, arm64), built on atlas/atl-touch commit \`${atl_sha}\`. Not a stable release — for testing only."
+          fi
